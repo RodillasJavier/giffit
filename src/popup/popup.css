@@ -1,0 +1,174 @@
+/* Popup Styles */
+
+.popup-container {
+  padding: 0;
+  margin: 0;
+}
+
+.popup-header {
+  padding: 24px 20px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.popup-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.popup-subtitle {
+  font-size: 14px;
+  opacity: 0.9;
+  margin: 0;
+}
+
+.popup-content {
+  padding: 20px;
+}
+
+.info-box {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border-left: 4px solid rgba(255, 255, 255, 0.3);
+}
+
+.info-box.success {
+  background: rgba(76, 175, 80, 0.2);
+  border-left-color: #4caf50;
+}
+
+.info-box p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.info-detail {
+  font-size: 12px;
+  opacity: 0.8;
+  font-weight: 400 !important;
+}
+
+.settings-section {
+  margin-top: 20px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.setting-item {
+  margin-bottom: 16px;
+}
+
+.setting-item label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  opacity: 0.95;
+}
+
+.setting-item input,
+.setting-item select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.setting-item input:focus,
+.setting-item select:focus {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.setting-item select option {
+  background: #764ba2;
+  color: white;
+}
+
+.setting-item small {
+  display: block;
+  font-size: 11px;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+.save-button {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+
+.save-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.save-button:active {
+  transform: translateY(0);
+}
+
+.success-message {
+  display: none;
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(76, 175, 80, 0.3);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.footer-text {
+  text-align: center;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.footer-text a {
+  color: white;
+  text-decoration: none;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.footer-text a:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.footer-disclaimer {
+  text-align: center;
+  font-size: 10px;
+  opacity: 0.6;
+  margin: 0;
+}

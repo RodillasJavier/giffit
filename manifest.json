@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Clip to GIF",
+  "version": "1.0.0",
+  "description": "Convert YouTube clips into downloadable GIFs",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.googlevideo.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content-main.js",
+        "content.css",
+        "chunks/*.js"
+      ],
+      "matches": ["*://*.youtube.com/*"]
+    }
+  ]
+}

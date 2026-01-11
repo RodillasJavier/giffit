@@ -1,0 +1,399 @@
+/* YouTube to GIF Overlay Styles */
+
+.ytgif-compact-button {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: ytgif-slideIn 0.5s ease-out;
+}
+
+.ytgif-compact-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(102, 126, 234, 0.5);
+}
+
+.ytgif-icon {
+  font-size: 18px;
+}
+
+.ytgif-text {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+/* Overlay Container */
+.ytgif-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: ytgif-fadeIn 0.3s ease-out;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+.ytgif-card {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: ytgif-scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Header */
+.ytgif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.ytgif-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.ytgif-close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f5f5f5;
+  border-radius: 50%;
+  font-size: 18px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ytgif-close-btn:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+/* Body */
+.ytgif-body {
+  padding: 24px;
+}
+
+/* Clip Info */
+.ytgif-clip-info {
+  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.ytgif-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.ytgif-info-row:not(:last-child) {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.ytgif-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.ytgif-value {
+  font-size: 14px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+/* Settings */
+.ytgif-settings {
+  margin-bottom: 24px;
+}
+
+.ytgif-setting-item {
+  margin-bottom: 20px;
+}
+
+.ytgif-setting-item label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.ytgif-setting-item select,
+.ytgif-setting-item input[type="range"] {
+  width: 100%;
+}
+
+.ytgif-setting-item select {
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.ytgif-setting-item select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.ytgif-setting-item input[type="range"] {
+  height: 6px;
+  border-radius: 3px;
+  background: #e0e0e0;
+  outline: none;
+  cursor: pointer;
+}
+
+.ytgif-setting-item input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.ytgif-setting-item input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.ytgif-format-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.ytgif-format-btn {
+  flex: 1;
+  padding: 10px;
+  border: 2px solid #e0e0e0;
+  background: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ytgif-format-btn:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.ytgif-format-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+  color: white;
+}
+
+.ytgif-setting-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Progress */
+.ytgif-progress-section {
+  margin: 24px 0;
+  text-align: center;
+}
+
+.ytgif-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.ytgif-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+.ytgif-status-text {
+  font-size: 14px;
+  color: #666;
+  margin: 8px 0;
+}
+
+.ytgif-progress-percent {
+  font-size: 24px;
+  font-weight: 700;
+  color: #667eea;
+  margin: 0;
+}
+
+/* Error */
+.ytgif-error {
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  margin: 24px 0;
+}
+
+.ytgif-error-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #c53030;
+  margin: 0 0 8px 0;
+}
+
+.ytgif-error-message {
+  font-size: 14px;
+  color: #742a2a;
+  margin: 0 0 16px 0;
+}
+
+/* Buttons */
+.ytgif-btn-primary {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.ytgif-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.ytgif-btn-primary:active {
+  transform: translateY(0);
+}
+
+.ytgif-btn-secondary {
+  width: 100%;
+  padding: 14px;
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ytgif-btn-secondary:hover {
+  background: #f7f7ff;
+}
+
+.ytgif-complete-actions {
+  display: grid;
+  gap: 12px;
+}
+
+/* Footer */
+.ytgif-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+  background: #fafafa;
+  border-radius: 0 0 16px 16px;
+}
+
+.ytgif-disclaimer {
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+  margin: 0;
+}
+
+/* Animations */
+@keyframes ytgif-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ytgif-scaleIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes ytgif-slideIn {
+  from {
+    transform: translateX(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Scrollbar */
+.ytgif-card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ytgif-card::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 0 16px 16px 0;
+}
+
+.ytgif-card::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+.ytgif-card::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
