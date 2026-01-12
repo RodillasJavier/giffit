@@ -111,6 +111,73 @@
   margin-bottom: 24px;
 }
 
+.ytgif-manual-notice {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #856404;
+  text-align: center;
+  font-weight: 500;
+}
+
+.ytgif-manual-inputs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ytgif-time-input {
+  flex: 1;
+}
+
+.ytgif-time-input label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.ytgif-time-input input {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.ytgif-time-input input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.ytgif-time-input input:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.ytgif-btn-link {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+.ytgif-btn-link:hover {
+  color: #764ba2;
+}
+
 .ytgif-info-row {
   display: flex;
   justify-content: space-between;
@@ -261,6 +328,13 @@
   font-weight: 700;
   color: #667eea;
   margin: 0;
+}
+
+.ytgif-file-size {
+  font-size: 12px;
+  color: #888;
+  margin-top: 8px;
+  font-weight: 500;
 }
 
 /* Error */

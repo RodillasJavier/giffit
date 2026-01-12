@@ -4,6 +4,7 @@
  */
 
 import { parseYouTubeUrl, isYouTubeClipPage, type YouTubeClipInfo } from '../utils/youtubeParser';
+import { extractClipInfoFromPage, waitForClipData, inferClipTimesFromPlayer } from '../utils/clipExtractor';
 import { initOverlay } from '../components/Overlay';
 import './content.css';
 
@@ -16,6 +17,13 @@ let currentUrl = window.location.href;
  */
 function init() {
   console.log('[YouTube to GIF] Content script loaded');
+
+  // Create a long-lived connection to keep service worker alive
+  const port = chrome.runtime.connect({ name: 'keepalive' });
+  port.onDisconnect.addListener(() => {
+    console.log('[YouTube to GIF] Keepalive port disconnected');
+  });
+
   checkAndInjectOverlay();
 
   // Watch for URL changes (YouTube is a SPA)
@@ -53,6 +61,39 @@ async function injectOverlay(clipInfo: YouTubeClipInfo) {
     return;
   }
 
+  // If this is a clip page but we're missing info, try to extract it from the page
+  if (clipInfo.clipId && (!clipInfo.videoId || clipInfo.startTime === null || clipInfo.endTime === null)) {
+    console.log('[YouTube to GIF] Incomplete clip info, extracting from page...');
+
+    try {
+      // Wait for YouTube to load the clip data
+      const extractedInfo = await waitForClipData(3000);
+
+      // Merge extracted info with existing clipInfo
+      if (extractedInfo.videoId) clipInfo.videoId = extractedInfo.videoId;
+      if (extractedInfo.startTime !== undefined && extractedInfo.startTime !== null) {
+        clipInfo.startTime = extractedInfo.startTime;
+      }
+      if (extractedInfo.endTime !== undefined && extractedInfo.endTime !== null) {
+        clipInfo.endTime = extractedInfo.endTime;
+      }
+
+      // If we still don't have times, try to infer from player
+      if (clipInfo.startTime === null || clipInfo.endTime === null) {
+        console.log('[YouTube to GIF] Inferring clip times from player...');
+        const inferredTimes = inferClipTimesFromPlayer();
+        if (inferredTimes) {
+          if (clipInfo.startTime === null) clipInfo.startTime = inferredTimes.startTime;
+          if (clipInfo.endTime === null) clipInfo.endTime = inferredTimes.endTime;
+        }
+      }
+
+      console.log('[YouTube to GIF] Final clip info:', clipInfo);
+    } catch (error) {
+      console.error('[YouTube to GIF] Failed to extract clip info:', error);
+    }
+  }
+
   // Create container for React app
   const overlayRoot = document.createElement('div');
   overlayRoot.id = 'ytgif-overlay-root';
@@ -61,10 +102,12 @@ async function injectOverlay(clipInfo: YouTubeClipInfo) {
   // Append to body
   document.body.appendChild(overlayRoot);
 
-  // Send message to background script
+  // Send message to background script (this wakes up the service worker)
   chrome.runtime.sendMessage({
     type: 'CLIP_DETECTED',
     clipInfo: clipInfo
+  }).catch(error => {
+    console.error('[YouTube to GIF] Failed to send clip detection:', error);
   });
 
   overlayInjected = true;
@@ -144,22 +187,29 @@ function removeOverlay() {
  * YouTube doesn't trigger page reloads, so we need to watch for URL changes
  */
 function observeUrlChanges() {
-  // Use MutationObserver to detect URL changes
   let lastUrl = window.location.href;
+  let checkTimeout: number | null = null;
 
-  new MutationObserver(() => {
-    const currentUrl = window.location.href;
-    if (currentUrl !== lastUrl) {
-      lastUrl = currentUrl;
-      console.log('[YouTube to GIF] URL changed:', currentUrl);
-      checkAndInjectOverlay();
+  // Debounced URL check to avoid excessive calls
+  const debouncedCheck = () => {
+    if (checkTimeout) {
+      clearTimeout(checkTimeout);
     }
-  }).observe(document.body, { childList: true, subtree: true });
+    checkTimeout = window.setTimeout(() => {
+      const currentUrl = window.location.href;
+      if (currentUrl !== lastUrl) {
+        lastUrl = currentUrl;
+        console.log('[YouTube to GIF] URL changed:', currentUrl);
+        checkAndInjectOverlay();
+      }
+      checkTimeout = null;
+    }, 500); // Wait 500ms before checking
+  };
 
-  // Also listen to popstate (back/forward navigation)
+  // Listen to popstate (back/forward navigation)
   window.addEventListener('popstate', () => {
     console.log('[YouTube to GIF] Navigation detected (popstate)');
-    checkAndInjectOverlay();
+    debouncedCheck();
   });
 
   // And pushstate/replacestate (YouTube's navigation)
@@ -169,13 +219,13 @@ function observeUrlChanges() {
   history.pushState = function(...args) {
     originalPushState.apply(this, args);
     console.log('[YouTube to GIF] Navigation detected (pushState)');
-    checkAndInjectOverlay();
+    debouncedCheck();
   };
 
   history.replaceState = function(...args) {
     originalReplaceState.apply(this, args);
-    console.log('[YouTube to GIF] Navigation detected (replaceState)');
-    checkAndInjectOverlay();
+    // Don't log or check on replaceState as it's too frequent
+    debouncedCheck();
   };
 }
 
@@ -184,12 +234,24 @@ function observeUrlChanges() {
  * This helps ensure we inject at the right time
  */
 function observeVideoPlayer() {
+  let lastCheck = 0;
+  const CHECK_INTERVAL = 1000; // Only check once per second
+
   const observer = new MutationObserver((mutations) => {
+    // Throttle checks to avoid excessive calls
+    const now = Date.now();
+    if (now - lastCheck < CHECK_INTERVAL) {
+      return;
+    }
+    lastCheck = now;
+
     // Check if video player exists
     const videoPlayer = document.querySelector('video');
     if (videoPlayer && isYouTubeClipPage(window.location.href) && !overlayInjected) {
       console.log('[YouTube to GIF] Video player detected on clip page');
       checkAndInjectOverlay();
+      // Once we inject, we can disconnect this observer
+      observer.disconnect();
     }
   });
 

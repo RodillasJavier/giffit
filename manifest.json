@@ -45,5 +45,6 @@
       ],
       "matches": ["*://*.youtube.com/*"]
     }
-  ]
+  ],
+  "minimum_chrome_version": "109"
 }

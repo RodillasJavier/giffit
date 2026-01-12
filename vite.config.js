@@ -41,6 +41,7 @@ export default defineConfig({
           // Content script is loaded by content-loader, so name it differently
           if (facadeModuleId.includes('content')) return 'content-main.js';
           if (facadeModuleId.includes('background')) return 'background.js';
+          if (facadeModuleId.includes('offscreen')) return 'offscreen.js';
           if (facadeModuleId.includes('Popup')) return 'popup.js';
           return '[name].js';
         },
@@ -64,7 +65,7 @@ export default defineConfig({
         }
       }
     },
-    // Increase chunk size warning limit for ffmpeg.wasm
+    // Increase chunk size warning limit for larger bundles
     chunkSizeWarningLimit: 5000,
     // Don't minify for easier debugging during development
     minify: false
