@@ -1,6 +1,6 @@
 # Development Chat History
 
-## Project: YouTube Clip to GIF Chrome Extension
+## Project: YouTube Clip to GIF Chrome Extension (Giffit)
 
 ### Session 1 - January 10, 2026
 
@@ -9,8 +9,8 @@ Building a Chrome extension that converts YouTube clips into downloadable GIFs u
 - **Approach**: Option 2 - Leverage YouTube's existing "Share Clip" feature
 - **Tech Stack**:
   - Manifest V3 Chrome Extension
-  - React for UI/overlaysxq
-  - ffmpeg.wasm for client-side media conversion
+  - React for UI/overlays
+  - ffmpeg.wasm for client-side media conversion (LATER CHANGED TO gifenc)
   - No backend API (client-side only for MVP)
 
 #### Key Decisions Made
@@ -20,7 +20,7 @@ Building a Chrome extension that converts YouTube clips into downloadable GIFs u
    - Cons: Dependent on YouTube's feature
 
 2. **Architecture**: Client-side processing
-   - ffmpeg.wasm runs in browser
+   - Video processing runs in browser
    - No server costs
    - Privacy-friendly (no data leaves user's browser)
 
@@ -29,243 +29,477 @@ Building a Chrome extension that converts YouTube clips into downloadable GIFs u
    - Vite: Fast build tooling for extension
    - ffmpeg.wasm: Industry standard for browser video processing
 
-#### Development Plan (Steps 1-4)
-
-**Step 1**: Extension Structure
-- Set up Manifest V3 configuration
-- Create directory structure for content scripts, background, components
-
-**Step 2**: YouTube Clip Detection
-- Content script to detect clip URLs
-- URL parser for video ID and time parameters
-
-**Step 3**: React UI Setup
-- Vite build configuration for extension
-- React overlay component that injects on clip pages
-
-**Step 4**: Media Processing Foundation
-- Integrate ffmpeg.wasm
-- Implement video stream extraction
-- Build GIF conversion pipeline
-- Add download functionality
-
-#### Important Considerations Discussed
-
-**Legal/ToS**:
-- YouTube prohibits video downloads in their ToS
-- Extension operates in legal gray area for personal use
-- Need to add fair use disclaimers
-
-**Technical Challenges**:
-- YouTube frequently changes video URL structure
-- CORS issues with video streams
-- Performance concerns with ffmpeg.wasm (limit to ~15 sec clips)
-- GIF file size optimization critical
-
-**Quality Decisions**:
-- Offer multiple formats (GIF, MP4, WebM)
-- Optimize: 10-15 fps, scaled resolution
-- Set reasonable clip length limits
-
 #### Current Status - ✅ Steps 1-4 COMPLETE!
 
 **Completed Tasks:**
 
 1. ✅ **Extension Structure Setup**
-   - Created Manifest V3 configuration (`manifest.json`)
-   - Set up project directories
-   - Created build system with Vite
-   - TypeScript configuration for type safety
-
 2. ✅ **YouTube Clip Detection**
-   - Built URL parser (`src/utils/youtubeParser.ts`)
-     - Handles multiple YouTube URL formats
-     - Extracts video ID, clip ID, timestamps
-     - Supports: youtube.com/clip, youtu.be, standard watch URLs
-   - Created content script (`src/content/index.tsx`)
-     - Detects when user is on a YouTube clip page
-     - Watches for URL changes (YouTube SPA navigation)
-     - Injects overlay when clip is detected
-
 3. ✅ **React UI Setup**
-   - Configured Vite for Chrome extension builds
-   - Built popup interface (`src/popup/Popup.tsx`)
-     - Settings panel for GIF quality, FPS, dimensions
-     - User-friendly gradient design
-   - Created overlay component (`src/components/Overlay.tsx`)
-     - Modal interface for GIF conversion
-     - Format selection (GIF, MP4, WebM)
-     - Progress tracking UI
-     - Customizable quality settings
-   - All styled with modern CSS
-
 4. ✅ **Build System**
-   - Vite builds multiple entry points correctly
-   - Post-build script moves files to correct locations
-   - Created placeholder icons (16px, 48px, 128px)
-   - Extension successfully builds to `dist/` folder
-   - Ready to load in Chrome for testing!
-
-**Files Created:**
-- `manifest.json` - Extension config
-- `package.json` - Dependencies (React, Vite, ffmpeg.wasm, TypeScript)
-- `vite.config.js` - Build configuration
-- `tsconfig.json` - TypeScript config
-- `src/utils/youtubeParser.ts` - URL parsing logic
-- `src/content/index.tsx` - Content script
-- `src/content/content.css` - Content styles
-- `src/background/index.ts` - Background service worker
-- `src/popup/Popup.tsx` - Extension popup
-- `src/popup/popup.css` - Popup styles
-- `src/components/Overlay.tsx` - Main UI overlay
-- `src/components/overlay.css` - Overlay styles
-- `scripts/post-build.js` - Build helper
-- `scripts/create-icons.js` - Icon generator
-- `.gitignore` - Git ignore rules
-- `README.md` - Full project documentation
-
-**Build Output:**
-```
-dist/
-├── manifest.json
-├── popup.html
-├── popup.js
-├── popup.css
-├── content.js
-├── content.css
-├── background.js
-├── overlay.js
-├── overlay.css
-├── icons/
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
-└── chunks/
-    └── [React bundles]
-```
 
 **Next Steps (To be implemented):**
-- [ ] Integrate ffmpeg.wasm for video processing
-- [ ] Implement video stream extraction from YouTube
-- [ ] Build GIF conversion pipeline
-- [ ] Add download functionality
-- [ ] Testing on real YouTube clips
+- [ ] Video processing integration
+- [ ] GIF conversion pipeline
+- [ ] Download functionality
 
 ---
 
-### Session 2 - Bug Fix: ES Module Loading
+### Session 2 - Bug Fixes: ES Module Loading & Overlay Component
 
-#### Issue Encountered
-When loading the extension in Chrome, got error:
-```
-Uncaught SyntaxError: Cannot use import statement outside a module
-```
+#### Bug Fix 1: ES Module Loading
+- **Issue**: `Cannot use import statement outside a module`
+- **Solution**: Two-layer loading system with content-loader.js wrapper
 
-#### Root Cause
-- Vite was outputting content scripts as ES modules with `import` statements
-- Chrome Manifest V3 doesn't support `type: "module"` for content scripts directly
-- Content scripts must be plain JavaScript, not ES modules
-
-#### Solution Implemented
-Created a two-layer loading system:
-
-1. **content-loader.js** → **content.js** (Plain JavaScript)
-   - Simple non-module script that the manifest references
-   - Uses dynamic `import()` to load the real content script
-
-2. **content/index.tsx** → **content-main.js** (ES Module)
-   - Contains all the actual logic
-   - Loaded dynamically as a module
-   - Declared in `web_accessible_resources`
-
-**Key Changes:**
-- Created `src/content-loader.js` as a wrapper
-- Updated Vite config to:
-  - Copy content-loader.js as content.js
-  - Build content/index.tsx as content-main.js
-- Updated manifest.json:
-  - Added content-main.js to web_accessible_resources
-  - Content script still references content.js
-
-This works because Chrome supports dynamic `import()` even though static ES module content scripts aren't supported!
-
-**Files Modified:**
-- `src/content-loader.js` (new) - Dynamic loader
-- `vite.config.js` - Added static copy for loader
-- `manifest.json` - Added content-main.js to web accessible resources
+#### Bug Fix 2: Overlay Component Loading
+- **Issue**: Vite tree-shook overlay component
+- **Solution**: Bundle overlay directly into content-main.js
 
 ---
 
-### Session 3 - Bug Fix: Overlay Component Loading
+### Session 3-4 - January 12, 2026: Video Processing Implementation & Major Blockers
 
-#### Issue Encountered
-When clicking "Create GIF" button, error in console:
+#### Video Processing Journey: FFmpeg → Offscreen Document → gifenc
+
+##### Attempt 1: FFmpeg.wasm in Content Script ❌
+**What We Tried:**
+- Direct integration of ffmpeg.wasm in content script
+- Used `VideoProcessor` class to handle conversion
+
+**Why It Failed:**
 ```
-(injectOverlay) threw error at console.error("[YouTube to GIF] Failed to load overlay:", error);
+SecurityError: Failed to construct 'Worker': Script at
+'chrome-extension://xxx/assets/worker-xxx.js' cannot be
+accessed from origin 'https://www.youtube.com'
 ```
 
-#### Root Cause
-- Overlay component was configured as a separate entry point in Vite
-- Vite tree-shook away the component code since nothing called it at module level
-- Dynamic import of overlay.js failed because the file was essentially empty
-- Build was outputting a 0.04 kB overlay.js that only imported React
-
-#### Solution Implemented
-Bundle overlay component directly into content script instead of separate file:
-
-**Changes Made:**
-1. **src/content/index.tsx**:
-   - Added direct import: `import { initOverlay } from '../components/Overlay'`
-   - Removed dynamic import logic
-   - Simplified overlay initialization
-
-2. **vite.config.js**:
-   - Removed overlay from build entry points
-   - Now only builds: popup, content, background
-
-3. **manifest.json**:
-   - Removed overlay.js and overlay.css from web_accessible_resources
-   - Overlay is now bundled with content-main.js
-
-**Results:**
-- content-main.js: 18.28 kB (includes Overlay component)
-- content.css: 7.92 kB (includes overlay styles)
-- Cleaner build, fewer files, no dynamic loading issues
-
-`★ Insight ─────────────────────────────────────`
-**Architecture lesson**: Chrome extension content scripts work best when fully self-contained. Trying to dynamically load separate modules adds complexity. Bundling related UI components together (content script + overlay) is simpler and more reliable.
-`─────────────────────────────────────────────────`
+**Root Cause:**
+- Content scripts in Manifest V3 **cannot create Web Workers**
+- FFmpeg.wasm requires Workers to function
+- Even with `web_accessible_resources`, cross-origin Worker creation is blocked
 
 ---
 
-### How to Test the Extension Right Now
+##### Attempt 2: Offscreen Document Architecture ❌
+**What We Tried:**
+- Created offscreen document (`src/offscreen/offscreen.ts`, `offscreen.html`)
+- Message passing: Content Script → Background → Offscreen → FFmpeg
+- Added `offscreen` permission to manifest
+- Implemented keepalive port connection to prevent service worker termination
 
-1. Navigate to project directory:
-   ```bash
-   cd pre-project-FelipePavanelliBR
+**Implementation Details:**
+```typescript
+// Background script manages offscreen document
+async function setupOffscreenDocument() {
+  await chrome.offscreen.createDocument({
+    url: 'offscreen.html',
+    reasons: ['WORKERS'],
+    justification: 'FFmpeg video processing requires Web Workers'
+  });
+}
+
+// Content script sends messages
+chrome.runtime.sendMessage({
+  type: 'CONVERT_VIDEO',
+  data: videoData
+});
+```
+
+**Bugs Fixed Along the Way:**
+1. `import.meta` syntax error - Fixed by adding `type="module"` to offscreen.html
+2. Chrome caching old offscreen.js - Fixed with version query parameter `?v=2`
+3. Service worker termination - Fixed with long-lived port connections
+
+**Why It STILL Failed:**
+```
+Loading the script 'blob:chrome-extension://xxx/...' violates
+the following Content Security Policy directive:
+"script-src 'self' 'wasm-unsafe-eval'"
+```
+
+**Root Cause:**
+- FFmpeg.wasm creates **blob URLs for worker threads**
+- Chrome Manifest V3 blocks **ALL blob URLs** in CSP, even with `wasm-unsafe-eval`
+- This is a **fundamental incompatibility** - no workaround exists
+
+---
+
+##### Attempt 3: gifenc (Pure JavaScript) ✅ WORKING
+**What We Did:**
+- Switched from ffmpeg.wasm to **gifenc** library
+- gifenc is pure JavaScript with **no Worker dependencies**
+- Removed all offscreen document code
+
+**Key Implementation:**
+```typescript
+// src/utils/videoProcessor.ts
+import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+
+export class VideoProcessor {
+  async processVideo(options: ConversionOptions): Promise<Blob> {
+    const videoElement = document.querySelector('video');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    // Capture frames by seeking video
+    const frames: Uint8ClampedArray[] = [];
+    for (let i = 0; i < totalFrames; i++) {
+      videoElement.currentTime = startTime + (i * frameDuration);
+      await seeked event;
+      ctx.drawImage(videoElement, 0, 0, width, height);
+      frames.push(ctx.getImageData(0, 0, width, height).data);
+    }
+
+    // Encode with gifenc (no Workers needed!)
+    const gif = GIFEncoder();
+    for (const frame of frames) {
+      const palette = quantize(frame, maxColors, { format: 'rgb565' });
+      const index = applyPalette(frame, palette, 'rgb565');
+      gif.writeFrame(index, width, height, { palette, delay });
+    }
+    gif.finish();
+
+    return new Blob([gif.bytes()], { type: 'image/gif' });
+  }
+}
+```
+
+**Advantages:**
+- ✅ No Web Workers required
+- ✅ Works in content scripts
+- ✅ Pure JavaScript (no WASM/blob URL issues)
+- ✅ Built-in color quantization
+- ✅ Smaller bundle size
+
+**Trade-offs:**
+- ⚠️ GIF-only (no MP4/WebM)
+- ⚠️ Slower than multi-threaded FFmpeg
+- ⚠️ Runs on main thread (can block UI)
+
+---
+
+#### UI/UX Redesign Attempts
+
+##### Original Design (Working)
+1. User navigates to YouTube clip page
+2. Extension detects clip URL and injects "Create GIF" button overlay
+3. User clicks button → conversion starts
+4. Download GIF when complete
+
+##### Attempted Redesign: URL-Based Workflow ❌ INCOMPLETE
+**What We Tried:**
+- User pastes clip URL into extension popup
+- Extension opens clip page in background
+- Extracts clip times from YouTube's page data
+- Shows settings screen in popup
+- Starts conversion
+
+**Implementation:**
+```typescript
+// Multi-step popup wizard
+type Step = 'input' | 'settings' | 'processing' | 'complete';
+
+// Step 1: Paste URL
+<input value={clipUrl} onChange={...} />
+<button onClick={handleGifIt}>Gif-it! 🚀</button>
+
+// Step 2: Extract times from page
+await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_CLIP_TIMES' });
+
+// Step 3: Show settings
+<div>Duration: {clipInfo.endTime - clipInfo.startTime}s</div>
+<input type="range" value={fps} />
+<button onClick={handleStartConversion}>Start Conversion</button>
+```
+
+**Major Blocker:**
+- **Chrome closes popups when navigating to different tabs**
+- Implemented `chrome.storage.local` session state persistence
+- But content script wasn't responding to messages
+- Progress stuck at 10%
+
+**Issues Encountered:**
+1. YouTube clip URLs don't include start/end times in URL parameters
+2. Times must be extracted from page JavaScript data (`ytInitialData`)
+3. Content script may not load by the time popup sends message
+4. No reliable way to keep popup open during extraction
+
+**Status:** ABANDONED - Too many race conditions and UX issues
+
+---
+
+### Current State (January 12, 2026)
+
+#### ✅ What Works
+1. **Extension Structure**: Manifest V3, Vite build system
+2. **Clip Detection**: Automatically detects YouTube clip pages
+3. **Overlay UI**: React overlay with settings (FPS, width, quality)
+4. **GIF Encoding**: gifenc successfully creates GIFs from video frames
+5. **Frame Capture**: Canvas-based frame extraction from HTML5 video element
+
+#### ❌ What Doesn't Work / Needs Implementation
+1. **Video Processing Not Integrated**:
+   - VideoProcessor class exists but not connected to UI
+   - Overlay doesn't trigger actual conversion yet
+
+2. **Download Functionality**:
+   - Blob creation works
+   - Download trigger not implemented in UI
+
+3. **Progress Tracking**:
+   - Progress callbacks exist in VideoProcessor
+   - Not wired up to UI progress bar
+
+4. **Error Handling**:
+   - Basic error messages
+   - No retry logic or user-friendly error states
+
+---
+
+### Technical Architecture (Current)
+
+```
+Extension Structure:
+├── manifest.json (Manifest V3)
+├── Background Service Worker (background.js)
+│   └── Minimal - just handles installation
+├── Content Script (content.js → content-main.js)
+│   ├── Detects YouTube clip pages
+│   ├── Injects React overlay
+│   └── Contains VideoProcessor
+├── Popup (popup.html/js)
+│   └── Settings interface
+└── React Overlay (bundled in content-main.js)
+    ├── UI for conversion
+    ├── Settings controls
+    └── Progress display
+
+Key Files:
+- src/utils/videoProcessor.ts - gifenc-based GIF creation
+- src/components/Overlay.tsx - Main conversion UI
+- src/content/index.tsx - Clip detection & overlay injection
+- src/utils/youtubeParser.ts - URL parsing
+- src/utils/clipExtractor.ts - Extract times from page data
+```
+
+---
+
+### Critical Technical Insights
+
+#### 1. **Chrome Extension Worker Limitations**
+```
+Content Scripts ❌ Cannot create Workers
+Offscreen Documents ✅ Can create Workers, BUT...
+  ❌ CSP blocks blob URLs (required by FFmpeg.wasm)
+Background Service Workers ✅ Can use Workers, BUT...
+  ❌ No access to page DOM/video element
+
+Solution: Use pure JavaScript libraries (gifenc)
+```
+
+#### 2. **YouTube Clip URL Structure**
+```
+Format: https://youtube.com/clip/Ugkx...?si=...
+
+⚠️ Start/end times NOT in URL!
+✅ Must extract from page JavaScript:
+   - window.ytInitialData
+   - window.ytInitialPlayerResponse
+   - Clip config objects
+```
+
+#### 3. **Chrome Popup Behavior**
+```
+⚠️ Popups close when:
+   - User switches tabs
+   - Extension opens a new tab
+   - User clicks outside popup
+
+Workaround: Use chrome.storage for state persistence
+But: Complex workflow with background tabs is poor UX
+```
+
+#### 4. **Video Frame Capture**
+```typescript
+// Reliable method: Seek + draw to canvas
+videoElement.currentTime = targetTime;
+await new Promise(r => video.addEventListener('seeked', r, { once: true }));
+ctx.drawImage(videoElement, 0, 0, width, height);
+const frame = ctx.getImageData(0, 0, width, height).data;
+
+⚠️ Must use { willReadFrequently: true } context attribute
+⚠️ Video must be paused during capture
+⚠️ Each seek is async - can be slow for many frames
+```
+
+---
+
+### Known Bugs & Issues
+
+#### 1. Background Script Caching
+- Chrome aggressively caches background.js
+- Requires complete extension removal + Chrome restart to clear
+- Version number bump doesn't always help
+
+#### 2. Console Logging Spam
+- Fixed with throttling and debouncing
+- MutationObserver now checks max once per second
+
+#### 3. Content Script Loading Timing
+- May not be ready when popup sends messages
+- Need retry logic with delays
+
+---
+
+### Next Steps & Recommendations
+
+#### Immediate Priorities (To Complete MVP)
+1. **Connect VideoProcessor to Overlay UI**
+   ```typescript
+   // In Overlay.tsx
+   const handleStartConversion = async () => {
+     const processor = new VideoProcessor();
+     const blob = await processor.processVideo(options, onProgress);
+     downloadBlob(blob, filename);
+   };
    ```
 
-2. Install dependencies (if not done):
-   ```bash
-   npm install
+2. **Implement Download Function**
+   ```typescript
+   function downloadBlob(blob: Blob, filename: string) {
+     const url = URL.createObjectURL(blob);
+     const a = document.createElement('a');
+     a.href = url;
+     a.download = filename;
+     a.click();
+     URL.revokeObjectURL(url);
+   }
    ```
 
-3. Build the extension:
-   ```bash
-   npm run build
-   ```
+3. **Wire Up Progress Bar**
+   - Connect VideoProcessor progress callbacks to Overlay state
+   - Update UI during capture and encoding phases
 
-4. Load in Chrome:
-   - Go to `chrome://extensions/`
-   - Enable "Developer mode"
-   - Click "Load unpacked"
-   - Select the `dist` folder
+4. **Add Error Handling**
+   - Try/catch in conversion flow
+   - User-friendly error messages
+   - Retry button
 
-5. Test it:
-   - Go to any YouTube video
-   - Click Share → Clip
-   - Create a clip with start/end times
-   - Look for the "Create GIF" button!
+5. **Testing & Polish**
+   - Test with various clip lengths
+   - Optimize for performance
+   - Add loading states
+
+#### Future Enhancements
+- [ ] Multiple output formats (if we solve Worker issue)
+- [ ] Batch processing multiple clips
+- [ ] Custom clip trimming without YouTube clip feature
+- [ ] Quality presets (low/medium/high)
+- [ ] Estimated file size preview
+- [ ] GIF optimization (dithering, palette optimization)
 
 ---
 
+### Dependencies & Environment
+
+```json
+{
+  "dependencies": {
+    "gifenc": "^1.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^4.3.0",
+    "vite-plugin-static-copy": "^0.17.0"
+  }
+}
+```
+
+**Chrome Version Required:** 109+ (Manifest V3)
+
+**Build Commands:**
+```bash
+npm install          # Install dependencies
+npm run build        # Build extension to dist/
+npm run dev          # Watch mode (not fully configured)
+```
+
+**Load Extension:**
+1. `chrome://extensions/`
+2. Enable "Developer mode"
+3. "Load unpacked" → select `dist/` folder
+4. To clear cache: Remove extension + restart Chrome
+
+---
+
+### Lessons Learned
+
+#### What Worked Well ✅
+- React + Vite for extension development
+- Content script bundling strategy
+- gifenc for Worker-free GIF encoding
+- URL parsing and clip detection
+- Dynamic overlay injection
+
+#### What Didn't Work ❌
+- FFmpeg.wasm (Worker limitations)
+- Offscreen document approach (CSP blob URL blocking)
+- URL-based workflow (popup closing issues)
+- Trying to extract clip times from URL (not in URL!)
+
+#### Key Takeaways 💡
+1. **Chrome Manifest V3 is restrictive** - many traditional approaches don't work
+2. **Choose libraries carefully** - must work without Workers in content scripts
+3. **Keep workflows simple** - complex popup interactions are problematic
+4. **Test early and often** - Chrome extension debugging is difficult
+5. **Document everything** - extension development has many gotchas
+
+---
+
+### For the Next Developer
+
+#### Quick Start
+```bash
+git clone <repo>
+cd giffit
+npm install
+npm run build
+# Load dist/ folder in chrome://extensions/
+```
+
+#### Current Code Status
+- ✅ **Compiles successfully**
+- ✅ **Loads in Chrome without errors**
+- ⚠️ **Conversion not fully wired up** (see Immediate Priorities)
+- ✅ **All infrastructure ready** - just needs integration
+
+#### Where to Look
+- **Start here:** `src/components/Overlay.tsx:65-167` (handleStartConversion)
+- **Video processor:** `src/utils/videoProcessor.ts:41-173`
+- **Clip detection:** `src/content/index.tsx:39-124`
+
+#### Testing a Change
+```bash
+npm run build
+# Go to chrome://extensions/ → Click reload button
+# Navigate to YouTube clip page
+# Click "Create GIF" button
+```
+
+---
+
+### Resources & References
+
+- [Chrome Extension Manifest V3 Docs](https://developer.chrome.com/docs/extensions/mv3/)
+- [gifenc Library](https://github.com/mattdesl/gifenc)
+- [YouTube URL Structure](https://gist.github.com/rodrigoborgesdeoliveira/987683cfbfcc8d800192da1e73adc486)
+- [Content Script Limitations](https://developer.chrome.com/docs/extensions/mv3/content_scripts/)
+
+---
+
+**Last Updated:** January 12, 2026
+**Status:** Video processing implemented but not integrated with UI
+**Ready for:** Final integration and testing
