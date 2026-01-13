@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import { isYouTubeClipPage } from '../utils/youtubeParser';
 import './popup.css';
 
 interface Settings {
@@ -17,7 +18,10 @@ function Popup() {
     defaultWidth: 480
   });
 
-  const [isOnYouTube, setIsOnYouTube] = useState(false);
+  const [isOnClipPage, setIsOnClipPage] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [currentTabId, setCurrentTabId] = useState<number | null>(null);
 
   useEffect(() => {
     // Load settings from storage
@@ -27,10 +31,12 @@ function Popup() {
       }
     });
 
-    // Check if current tab is YouTube
+    // Check if current tab is a YouTube clip page
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.url?.includes('youtube.com')) {
-        setIsOnYouTube(true);
+      if (tabs[0]) {
+        const url = tabs[0].url || '';
+        setCurrentTabId(tabs[0].id || null);
+        setIsOnClipPage(isYouTubeClipPage(url));
       }
     });
   }, []);
@@ -49,6 +55,36 @@ function Popup() {
     });
   };
 
+  const handleCreateGif = async () => {
+    if (!currentTabId) {
+      setErrorMessage('Unable to access current tab');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      // Send message to content script to open overlay
+      const response = await chrome.tabs.sendMessage(currentTabId, {
+        type: 'OPEN_OVERLAY'
+      });
+
+      if (response && response.success) {
+        console.log('[Popup] Overlay opened successfully');
+        // Close the popup after successfully opening overlay
+        window.close();
+      } else {
+        setErrorMessage(response?.error || 'Failed to open GIF creator');
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('[Popup] Error opening overlay:', error);
+      setErrorMessage('Failed to communicate with the page. Please refresh and try again.');
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="popup-container">
       <div className="popup-header">
@@ -57,22 +93,38 @@ function Popup() {
       </div>
 
       <div className="popup-content">
-        {!isOnYouTube && (
+        {!isOnClipPage && (
           <div className="info-box">
             <p>📍 Navigate to a YouTube clip to get started!</p>
             <p className="info-detail">
-              Use YouTube's "Share → Clip" feature, then click our button to create a GIF.
+              Use YouTube's "Share → Clip" feature to create a clip, then click the extension icon.
             </p>
           </div>
         )}
 
-        {isOnYouTube && (
-          <div className="info-box success">
-            <p>✅ You're on YouTube!</p>
-            <p className="info-detail">
-              Look for the "Create GIF" button on clip pages.
-            </p>
-          </div>
+        {isOnClipPage && (
+          <>
+            <div className="info-box success">
+              <p>✅ Clip detected!</p>
+              <p className="info-detail">
+                Click the button below to create a GIF from this clip.
+              </p>
+            </div>
+
+            <button
+              className="create-gif-button"
+              onClick={handleCreateGif}
+              disabled={isLoading}
+            >
+              {isLoading ? '⏳ Opening...' : '🚀 Create GIF from Clip'}
+            </button>
+
+            {errorMessage && (
+              <div className="error-box">
+                <p>❌ {errorMessage}</p>
+              </div>
+            )}
+          </>
         )}
 
         <div className="settings-section">

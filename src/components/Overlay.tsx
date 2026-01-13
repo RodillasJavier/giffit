@@ -13,7 +13,6 @@ interface OverlayProps {
 type ConversionStatus = 'idle' | 'preparing' | 'downloading' | 'converting' | 'complete' | 'error';
 
 function Overlay({ clipInfo }: OverlayProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [status, setStatus] = useState<ConversionStatus>('idle');
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
@@ -27,26 +26,7 @@ function Overlay({ clipInfo }: OverlayProps) {
   });
 
   const processorRef = useRef<VideoProcessor | null>(null);
-  const [manualMode, setManualMode] = useState(false);
-  const [manualStartTime, setManualStartTime] = useState(0);
-  const [manualEndTime, setManualEndTime] = useState(10);
-
   const clipDuration = getClipDuration(clipInfo);
-
-  // Check if we need manual mode
-  useEffect(() => {
-    if (clipInfo.startTime === null || clipInfo.endTime === null) {
-      console.log('[Overlay] Missing clip times, enabling manual mode');
-      setManualMode(true);
-
-      // Try to get current video position as a starting point
-      const video = document.querySelector('video');
-      if (video) {
-        setManualStartTime(Math.floor(video.currentTime || 0));
-        setManualEndTime(Math.floor((video.currentTime || 0) + 10));
-      }
-    }
-  }, [clipInfo]);
 
   useEffect(() => {
     // Load settings from storage
@@ -69,29 +49,15 @@ function Overlay({ clipInfo }: OverlayProps) {
     setOutputBlob(null);
     setStatusMessage('Initializing...');
 
-    // Use manual times if in manual mode
-    let startTime = clipInfo.startTime;
-    let endTime = clipInfo.endTime;
-    let duration = clipDuration;
+    const startTime = clipInfo.startTime;
+    const endTime = clipInfo.endTime;
+    const duration = clipDuration;
 
-    if (manualMode) {
-      startTime = manualStartTime;
-      endTime = manualEndTime;
-      duration = endTime - startTime;
-
-      // Validate manual inputs
-      if (startTime < 0 || endTime <= startTime) {
-        setStatus('error');
-        setErrorMessage('Invalid time range. End time must be greater than start time.');
-        return;
-      }
-    } else {
-      // Validate clip info
-      if (startTime === null || duration === null) {
-        setStatus('error');
-        setErrorMessage('Invalid clip information. Please switch to manual mode or try refreshing the page.');
-        return;
-      }
+    // Validate clip info
+    if (startTime === null || endTime === null || duration === null) {
+      setStatus('error');
+      setErrorMessage('Invalid clip information. Please ensure you are on a valid YouTube clip page.');
+      return;
     }
 
     // Check duration limit (max 60 seconds for performance)
@@ -201,15 +167,6 @@ function Overlay({ clipInfo }: OverlayProps) {
     return `~${totalKB.toFixed(0)} KB`;
   };
 
-  if (!isExpanded) {
-    return (
-      <div className="ytgif-compact-button" onClick={() => setIsExpanded(true)}>
-        <span className="ytgif-icon">🎬</span>
-        <span className="ytgif-text">Create GIF</span>
-      </div>
-    );
-  }
-
   return (
     <div className="ytgif-overlay">
       <div className="ytgif-card">
@@ -223,83 +180,24 @@ function Overlay({ clipInfo }: OverlayProps) {
         <div className="ytgif-body">
           {/* Clip Info */}
           <div className="ytgif-clip-info">
-            {manualMode ? (
-              <>
-                <div className="ytgif-manual-notice">
-                  ⚠️ Manual mode: Set your clip times below
-                </div>
-                <div className="ytgif-manual-inputs">
-                  <div className="ytgif-time-input">
-                    <label>Start Time (seconds)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={manualStartTime}
-                      onChange={(e) => setManualStartTime(Number(e.target.value))}
-                      disabled={status !== 'idle'}
-                    />
-                  </div>
-                  <div className="ytgif-time-input">
-                    <label>End Time (seconds)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={manualEndTime}
-                      onChange={(e) => setManualEndTime(Number(e.target.value))}
-                      disabled={status !== 'idle'}
-                    />
-                  </div>
-                </div>
-                <div className="ytgif-info-row">
-                  <span className="ytgif-label">Duration:</span>
-                  <span className="ytgif-value">
-                    {formatTime(manualEndTime - manualStartTime)}
-                  </span>
-                </div>
-                <div className="ytgif-info-row">
-                  <span className="ytgif-label">Estimated Size:</span>
-                  <span className="ytgif-value">
-                    {formatFileSize(manualEndTime - manualStartTime, settings.width, settings.fps)}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="ytgif-info-row">
-                  <span className="ytgif-label">Duration:</span>
-                  <span className="ytgif-value">
-                    {clipDuration ? formatTime(clipDuration) : 'Unknown'}
-                  </span>
-                </div>
-                {clipInfo.startTime !== null && (
-                  <div className="ytgif-info-row">
-                    <span className="ytgif-label">Time Range:</span>
-                    <span className="ytgif-value">
-                      {formatTime(clipInfo.startTime)} - {formatTime(clipInfo.endTime || 0)}
-                    </span>
-                  </div>
-                )}
-                <div className="ytgif-info-row">
-                  <span className="ytgif-label">Estimated Size:</span>
-                  <span className="ytgif-value">
-                    {formatFileSize(clipDuration, settings.width, settings.fps)}
-                  </span>
-                </div>
-                <button
-                  className="ytgif-btn-link"
-                  onClick={() => {
-                    setManualMode(true);
-                    const video = document.querySelector('video');
-                    if (video) {
-                      setManualStartTime(Math.floor(video.currentTime || 0));
-                      setManualEndTime(Math.floor((video.currentTime || 0) + 10));
-                    }
-                  }}
-                >
-                  Switch to manual mode
-                </button>
-              </>
-            )}
+            <div className="ytgif-clip-summary">
+              {clipInfo.startTime !== null && clipInfo.endTime !== null && clipDuration !== null ? (
+                <>
+                  <p className="ytgif-clip-title">Converting clip:</p>
+                  <p className="ytgif-clip-times">
+                    {formatTime(clipInfo.startTime)} - {formatTime(clipInfo.endTime)} ({clipDuration} {clipDuration === 1 ? 'second' : 'seconds'})
+                  </p>
+                </>
+              ) : (
+                <p className="ytgif-clip-title">⚠️ Clip information missing</p>
+              )}
+            </div>
+            <div className="ytgif-info-row">
+              <span className="ytgif-label">Estimated Size:</span>
+              <span className="ytgif-value">
+                {formatFileSize(clipDuration, settings.width, settings.fps)}
+              </span>
+            </div>
           </div>
 
           {/* Settings */}
