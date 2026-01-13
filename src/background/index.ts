@@ -90,6 +90,23 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await setupOffscreenDocument();
 });
 
+// Listen for extension icon clicks
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log('[Background] Extension icon clicked', tab);
+
+  // Only activate on YouTube video pages
+  if (tab.id && tab.url?.includes('youtube.com/watch')) {
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY' });
+      console.log('[Background] Toggle overlay message sent');
+    } catch (error) {
+      console.error('[Background] Failed to send toggle message:', error);
+    }
+  } else {
+    console.log('[Background] Not on YouTube video page, ignoring click');
+  }
+});
+
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[Background] ===== MESSAGE RECEIVED =====');

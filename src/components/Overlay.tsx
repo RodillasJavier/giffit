@@ -1,25 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { YouTubeClipInfo } from '../utils/youtubeParser';
-import { formatTime, getClipDuration } from '../utils/youtubeParser';
+import { formatTime } from '../utils/youtubeParser';
 import { VideoProcessor, downloadBlob, formatFileSize as formatBytes } from '../utils/videoProcessor';
 import type { ConversionProgress } from '../utils/videoProcessor';
+import { Timeline } from './Timeline';
+import { VideoPreview } from './VideoPreview';
 import './overlay.css';
 
+interface VideoInfo {
+  videoId: string | null;
+  duration: number;
+  currentTime: number;
+  src: string;
+}
+
 interface OverlayProps {
-  clipInfo: YouTubeClipInfo;
+  videoInfo: VideoInfo;
 }
 
 type ConversionStatus = 'idle' | 'preparing' | 'downloading' | 'converting' | 'complete' | 'error';
 
-function Overlay({ clipInfo }: OverlayProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+const MAX_GIF_DURATION = 15; // Maximum GIF duration in seconds
+
+function Overlay({ videoInfo }: OverlayProps) {
+  // Video trimming state
+  const [startTime, setStartTime] = useState(0);
+  const [endTime, setEndTime] = useState(Math.min(MAX_GIF_DURATION, videoInfo.duration));
+
+  // Conversion state
   const [status, setStatus] = useState<ConversionStatus>('idle');
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [outputBlob, setOutputBlob] = useState<Blob | null>(null);
   const [outputSize, setOutputSize] = useState<string>('');
+
+  // Settings state
   const [settings, setSettings] = useState({
     fps: 15,
     width: 480,
@@ -27,29 +43,20 @@ function Overlay({ clipInfo }: OverlayProps) {
   });
 
   const processorRef = useRef<VideoProcessor | null>(null);
-  const [manualMode, setManualMode] = useState(false);
-  const [manualStartTime, setManualStartTime] = useState(0);
-  const [manualEndTime, setManualEndTime] = useState(10);
 
-  const clipDuration = getClipDuration(clipInfo);
-
-  // Check if we need manual mode
+  // Initialize start/end times based on video current time or start of video
   useEffect(() => {
-    if (clipInfo.startTime === null || clipInfo.endTime === null) {
-      console.log('[Overlay] Missing clip times, enabling manual mode');
-      setManualMode(true);
+    const initialStart = Math.floor(videoInfo.currentTime || 0);
+    const initialEnd = Math.min(
+      initialStart + MAX_GIF_DURATION,
+      videoInfo.duration
+    );
+    setStartTime(initialStart);
+    setEndTime(initialEnd);
+  }, [videoInfo]);
 
-      // Try to get current video position as a starting point
-      const video = document.querySelector('video');
-      if (video) {
-        setManualStartTime(Math.floor(video.currentTime || 0));
-        setManualEndTime(Math.floor((video.currentTime || 0) + 10));
-      }
-    }
-  }, [clipInfo]);
-
+  // Load settings from storage
   useEffect(() => {
-    // Load settings from storage
     chrome.storage.local.get(['settings'], (result) => {
       if (result.settings) {
         setSettings((prev) => ({
@@ -60,8 +67,39 @@ function Overlay({ clipInfo }: OverlayProps) {
         }));
       }
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
+  /**
+   * Handle start time change from timeline
+   * Enforce 15-second max constraint
+   */
+  const handleStartTimeChange = (newStartTime: number) => {
+    const maxStart = Math.max(0, Math.min(newStartTime, endTime - 0.1));
+
+    // If this would make duration > 15s, adjust end too
+    if (endTime - maxStart > MAX_GIF_DURATION) {
+      setEndTime(maxStart + MAX_GIF_DURATION);
+    }
+
+    setStartTime(maxStart);
+  };
+
+  /**
+   * Handle end time change from timeline
+   * Enforce 15-second max constraint
+   */
+  const handleEndTimeChange = (newEndTime: number) => {
+    const maxEnd = Math.min(
+      newEndTime,
+      startTime + MAX_GIF_DURATION,  // Max 15s from start
+      videoInfo.duration             // Can't exceed video
+    );
+    setEndTime(maxEnd);
+  };
+
+  /**
+   * Start GIF conversion
+   */
   const handleStartConversion = async () => {
     setStatus('preparing');
     setProgress(0);
@@ -69,35 +107,18 @@ function Overlay({ clipInfo }: OverlayProps) {
     setOutputBlob(null);
     setStatusMessage('Initializing...');
 
-    // Use manual times if in manual mode
-    let startTime = clipInfo.startTime;
-    let endTime = clipInfo.endTime;
-    let duration = clipDuration;
+    const duration = endTime - startTime;
 
-    if (manualMode) {
-      startTime = manualStartTime;
-      endTime = manualEndTime;
-      duration = endTime - startTime;
-
-      // Validate manual inputs
-      if (startTime < 0 || endTime <= startTime) {
-        setStatus('error');
-        setErrorMessage('Invalid time range. End time must be greater than start time.');
-        return;
-      }
-    } else {
-      // Validate clip info
-      if (startTime === null || duration === null) {
-        setStatus('error');
-        setErrorMessage('Invalid clip information. Please switch to manual mode or try refreshing the page.');
-        return;
-      }
+    // Validate duration
+    if (duration <= 0) {
+      setStatus('error');
+      setErrorMessage('Invalid time range. End time must be greater than start time.');
+      return;
     }
 
-    // Check duration limit (max 60 seconds for performance)
-    if (duration > 60) {
+    if (duration > MAX_GIF_DURATION) {
       setStatus('error');
-      setErrorMessage('Clip is too long! Please use clips shorter than 60 seconds for best results.');
+      setErrorMessage(`Duration cannot exceed ${MAX_GIF_DURATION} seconds.`);
       return;
     }
 
@@ -131,8 +152,8 @@ function Overlay({ clipInfo }: OverlayProps) {
         fps: settings.fps,
         width: settings.width,
         quality: settings.quality,
-        startTime: startTime!,
-        duration: duration!
+        startTime: startTime,
+        duration: duration
       }, onProgress);
 
       // Store the result
@@ -144,7 +165,7 @@ function Overlay({ clipInfo }: OverlayProps) {
 
       console.log('[Overlay] GIF creation complete!', {
         size: blob.size,
-        clipInfo
+        videoInfo
       });
     } catch (error) {
       console.error('[Overlay] Conversion error:', error);
@@ -166,6 +187,9 @@ function Overlay({ clipInfo }: OverlayProps) {
     }
   };
 
+  /**
+   * Download the generated GIF
+   */
   const handleDownload = () => {
     if (!outputBlob) {
       console.error('[Overlay] No output blob to download');
@@ -174,23 +198,28 @@ function Overlay({ clipInfo }: OverlayProps) {
 
     // Generate filename
     const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
-    const filename = `youtube-clip-${clipInfo.videoId || 'clip'}-${timestamp}.gif`;
+    const filename = `youtube-gif-${videoInfo.videoId || 'video'}-${timestamp}.gif`;
 
     // Trigger download
     downloadBlob(outputBlob, filename);
     console.log('[Overlay] Downloaded:', filename);
   };
 
+  /**
+   * Close the overlay
+   */
   const handleClose = () => {
-    // Remove the overlay
     const overlayRoot = document.getElementById('ytgif-overlay-root');
     if (overlayRoot) {
-      overlayRoot.remove();
+      overlayRoot.classList.remove('visible');
+      setTimeout(() => overlayRoot.remove(), 300); // Wait for animation
     }
   };
 
-  const formatFileSize = (duration: number | null, width: number, fps: number): string => {
-    if (!duration) return 'Unknown';
+  /**
+   * Estimate GIF file size
+   */
+  const formatFileSize = (duration: number, width: number, fps: number): string => {
     // Rough estimate: GIF is ~500KB per second at 480p, 15fps
     const sizePerSecond = (width / 480) * (fps / 15) * 500;
     const totalKB = duration * sizePerSecond;
@@ -201,200 +230,156 @@ function Overlay({ clipInfo }: OverlayProps) {
     return `~${totalKB.toFixed(0)} KB`;
   };
 
-  if (!isExpanded) {
-    return (
-      <div className="ytgif-compact-button" onClick={() => setIsExpanded(true)}>
-        <span className="ytgif-icon">🎬</span>
-        <span className="ytgif-text">Create GIF</span>
-      </div>
-    );
-  }
+  const selectedDuration = endTime - startTime;
 
   return (
-    <div className="ytgif-overlay">
-      <div className="ytgif-card">
-        <div className="ytgif-header">
-          <h2 className="ytgif-title">Create GIF from Clip</h2>
-          <button className="ytgif-close-btn" onClick={handleClose}>
-            ✕
-          </button>
+    <div className="ytgif-sidebar">
+      {/* Header */}
+      <div className="ytgif-sidebar-header">
+        <h2 className="ytgif-sidebar-title">Giffit</h2>
+        <button className="ytgif-close-btn" onClick={handleClose}>
+          ✕
+        </button>
+      </div>
+
+      <div className="ytgif-sidebar-body">
+        {/* Video Controls */}
+        <div className="ytgif-section">
+          <h3 className="ytgif-section-title">Video Controls</h3>
+          <VideoPreview
+            videoSrc={videoInfo.src}
+            startTime={startTime}
+            endTime={endTime}
+          />
         </div>
 
-        <div className="ytgif-body">
-          {/* Clip Info */}
-          <div className="ytgif-clip-info">
-            {manualMode ? (
-              <>
-                <div className="ytgif-manual-notice">
-                  ⚠️ Manual mode: Set your clip times below
-                </div>
-                <div className="ytgif-manual-inputs">
-                  <div className="ytgif-time-input">
-                    <label>Start Time (seconds)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={manualStartTime}
-                      onChange={(e) => setManualStartTime(Number(e.target.value))}
-                      disabled={status !== 'idle'}
-                    />
-                  </div>
-                  <div className="ytgif-time-input">
-                    <label>End Time (seconds)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={manualEndTime}
-                      onChange={(e) => setManualEndTime(Number(e.target.value))}
-                      disabled={status !== 'idle'}
-                    />
-                  </div>
-                </div>
-                <div className="ytgif-info-row">
-                  <span className="ytgif-label">Duration:</span>
-                  <span className="ytgif-value">
-                    {formatTime(manualEndTime - manualStartTime)}
-                  </span>
-                </div>
-                <div className="ytgif-info-row">
-                  <span className="ytgif-label">Estimated Size:</span>
-                  <span className="ytgif-value">
-                    {formatFileSize(manualEndTime - manualStartTime, settings.width, settings.fps)}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="ytgif-info-row">
-                  <span className="ytgif-label">Duration:</span>
-                  <span className="ytgif-value">
-                    {clipDuration ? formatTime(clipDuration) : 'Unknown'}
-                  </span>
-                </div>
-                {clipInfo.startTime !== null && (
-                  <div className="ytgif-info-row">
-                    <span className="ytgif-label">Time Range:</span>
-                    <span className="ytgif-value">
-                      {formatTime(clipInfo.startTime)} - {formatTime(clipInfo.endTime || 0)}
-                    </span>
-                  </div>
-                )}
-                <div className="ytgif-info-row">
-                  <span className="ytgif-label">Estimated Size:</span>
-                  <span className="ytgif-value">
-                    {formatFileSize(clipDuration, settings.width, settings.fps)}
-                  </span>
-                </div>
-                <button
-                  className="ytgif-btn-link"
-                  onClick={() => {
-                    setManualMode(true);
-                    const video = document.querySelector('video');
-                    if (video) {
-                      setManualStartTime(Math.floor(video.currentTime || 0));
-                      setManualEndTime(Math.floor((video.currentTime || 0) + 10));
-                    }
-                  }}
-                >
-                  Switch to manual mode
-                </button>
-              </>
+        {/* Timeline */}
+        <div className="ytgif-section">
+          <h3 className="ytgif-section-title">Select Range (max {MAX_GIF_DURATION}s)</h3>
+          <Timeline
+            videoDuration={videoInfo.duration}
+            startTime={startTime}
+            endTime={endTime}
+            onStartChange={handleStartTimeChange}
+            onEndChange={handleEndTimeChange}
+            fps={settings.fps}
+          />
+          <div className="ytgif-duration-display">
+            <span className="ytgif-duration-label">Selected:</span>
+            <span className="ytgif-duration-value">
+              {formatTime(selectedDuration)}
+            </span>
+            <span className="ytgif-duration-remaining">
+              / {MAX_GIF_DURATION}s max
+            </span>
+          </div>
+        </div>
+
+        {/* Settings */}
+        {status === 'idle' && (
+          <div className="ytgif-section ytgif-settings">
+            <h3 className="ytgif-section-title">Settings</h3>
+
+            <div className="ytgif-setting-item">
+              <label>Quality</label>
+              <select
+                value={settings.quality}
+                onChange={(e) => setSettings({ ...settings, quality: e.target.value as any })}
+              >
+                <option value="low">Low (Smaller file)</option>
+                <option value="medium">Medium (Balanced)</option>
+                <option value="high">High (Best quality)</option>
+              </select>
+            </div>
+
+            <div className="ytgif-setting-item">
+              <label>FPS: {settings.fps}</label>
+              <input
+                type="range"
+                min="10"
+                max="30"
+                value={settings.fps}
+                onChange={(e) => setSettings({ ...settings, fps: parseInt(e.target.value) })}
+              />
+            </div>
+
+            <div className="ytgif-setting-item">
+              <label>Width: {settings.width}px</label>
+              <input
+                type="range"
+                min="240"
+                max="1280"
+                step="80"
+                value={settings.width}
+                onChange={(e) => setSettings({ ...settings, width: parseInt(e.target.value) })}
+              />
+            </div>
+
+            <div className="ytgif-info-row">
+              <span className="ytgif-label">Estimated Size:</span>
+              <span className="ytgif-value">
+                {formatFileSize(selectedDuration, settings.width, settings.fps)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Progress */}
+        {status !== 'idle' && status !== 'error' && (
+          <div className="ytgif-section ytgif-progress-section">
+            <div className="ytgif-progress-bar">
+              <div
+                className="ytgif-progress-fill"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="ytgif-status-text">
+              {statusMessage || (
+                <>
+                  {status === 'preparing' && 'Preparing...'}
+                  {status === 'downloading' && 'Capturing frames...'}
+                  {status === 'converting' && 'Encoding GIF...'}
+                  {status === 'complete' && '✅ Complete!'}
+                </>
+              )}
+            </p>
+            <p className="ytgif-progress-percent">{progress}%</p>
+            {status === 'complete' && outputSize && (
+              <p className="ytgif-file-size">File size: {outputSize}</p>
             )}
           </div>
+        )}
 
-          {/* Settings */}
+        {/* Error */}
+        {status === 'error' && (
+          <div className="ytgif-section ytgif-error">
+            <p className="ytgif-error-title">❌ Error</p>
+            <p className="ytgif-error-message">{errorMessage}</p>
+            <button
+              className="ytgif-btn-secondary"
+              onClick={() => setStatus('idle')}
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="ytgif-section ytgif-actions">
           {status === 'idle' && (
-            <div className="ytgif-settings">
-              <div className="ytgif-setting-item">
-                <label>Quality</label>
-                <select
-                  value={settings.quality}
-                  onChange={(e) => setSettings({ ...settings, quality: e.target.value as any })}
-                >
-                  <option value="low">Low (Smaller file)</option>
-                  <option value="medium">Medium (Balanced)</option>
-                  <option value="high">High (Best quality)</option>
-                </select>
-              </div>
-
-              <div className="ytgif-setting-row">
-                <div className="ytgif-setting-item">
-                  <label>FPS: {settings.fps}</label>
-                  <input
-                    type="range"
-                    min="10"
-                    max="30"
-                    value={settings.fps}
-                    onChange={(e) => setSettings({ ...settings, fps: parseInt(e.target.value) })}
-                  />
-                </div>
-
-                <div className="ytgif-setting-item">
-                  <label>Width: {settings.width}px</label>
-                  <input
-                    type="range"
-                    min="240"
-                    max="1280"
-                    step="80"
-                    value={settings.width}
-                    onChange={(e) => setSettings({ ...settings, width: parseInt(e.target.value) })}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Progress */}
-          {status !== 'idle' && status !== 'error' && (
-            <div className="ytgif-progress-section">
-              <div className="ytgif-progress-bar">
-                <div
-                  className="ytgif-progress-fill"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <p className="ytgif-status-text">
-                {statusMessage || (
-                  <>
-                    {status === 'preparing' && 'Preparing...'}
-                    {status === 'downloading' && 'Capturing frames...'}
-                    {status === 'converting' && 'Encoding GIF...'}
-                    {status === 'complete' && '✅ Complete!'}
-                  </>
-                )}
-              </p>
-              <p className="ytgif-progress-percent">{progress}%</p>
-              {status === 'complete' && outputSize && (
-                <p className="ytgif-file-size">File size: {outputSize}</p>
-              )}
-            </div>
-          )}
-
-          {/* Error */}
-          {status === 'error' && (
-            <div className="ytgif-error">
-              <p className="ytgif-error-title">❌ Error</p>
-              <p className="ytgif-error-message">{errorMessage}</p>
-              <button
-                className="ytgif-btn-secondary"
-                onClick={() => setStatus('idle')}
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-
-          {/* Actions */}
-          {status === 'idle' && (
-            <button className="ytgif-btn-primary" onClick={handleStartConversion}>
-              🚀 Start Conversion
+            <button
+              className="ytgif-btn-primary"
+              onClick={handleStartConversion}
+              disabled={selectedDuration <= 0 || selectedDuration > MAX_GIF_DURATION}
+            >
+              🎬 Convert to GIF
             </button>
           )}
 
           {status === 'complete' && (
-            <div className="ytgif-complete-actions">
+            <>
               <button className="ytgif-btn-primary" onClick={handleDownload}>
-                💾 Download GIF
+                ⬇️ Download GIF
               </button>
               <button
                 className="ytgif-btn-secondary"
@@ -406,15 +391,16 @@ function Overlay({ clipInfo }: OverlayProps) {
               >
                 Create Another
               </button>
-            </div>
+            </>
           )}
         </div>
+      </div>
 
-        <div className="ytgif-footer">
-          <p className="ytgif-disclaimer">
-            ⚠️ For personal use only. Respect copyright laws.
-          </p>
-        </div>
+      {/* Footer */}
+      <div className="ytgif-sidebar-footer">
+        <p className="ytgif-disclaimer">
+          ⚠️ For personal use only. Respect copyright laws.
+        </p>
       </div>
     </div>
   );
@@ -423,10 +409,10 @@ function Overlay({ clipInfo }: OverlayProps) {
 export default Overlay;
 
 // Initialize the overlay when this script is loaded
-export function initOverlay(clipInfo: YouTubeClipInfo) {
+export function initOverlay(videoInfo: VideoInfo) {
   const container = document.getElementById('ytgif-overlay-root');
   if (container) {
     const root = createRoot(container);
-    root.render(<Overlay clipInfo={clipInfo} />);
+    root.render(<Overlay videoInfo={videoInfo} />);
   }
 }

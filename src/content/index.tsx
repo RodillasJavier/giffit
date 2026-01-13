@@ -1,12 +1,19 @@
 /**
  * Content Script
- * Runs on all YouTube pages, detects clips, and injects React overlay
+ * Runs on all YouTube pages, detects video pages, and injects React overlay on demand
  */
 
-import { parseYouTubeUrl, isYouTubeClipPage, type YouTubeClipInfo } from '../utils/youtubeParser';
-import { extractClipInfoFromPage, waitForClipData, inferClipTimesFromPlayer } from '../utils/clipExtractor';
+import { parseYouTubeUrl } from '../utils/youtubeParser';
 import { initOverlay } from '../components/Overlay';
 import './content.css';
+
+// Video info interface
+interface VideoInfo {
+  videoId: string | null;
+  duration: number;
+  currentTime: number;
+  src: string;
+}
 
 // Track if overlay is already injected
 let overlayInjected = false;
@@ -24,7 +31,17 @@ function init() {
     console.log('[YouTube to GIF] Keepalive port disconnected');
   });
 
-  checkAndInjectOverlay();
+  // Listen for messages from background script
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('[Content] Message received:', message);
+
+    if (message.type === 'TOGGLE_OVERLAY') {
+      toggleOverlay();
+      sendResponse({ success: true });
+    }
+
+    return true; // Keep channel open for async response
+  });
 
   // Watch for URL changes (YouTube is a SPA)
   observeUrlChanges();
@@ -34,135 +51,121 @@ function init() {
 }
 
 /**
- * Check if current page is a clip and inject overlay if needed
+ * Check if current page is a YouTube video page
  */
-function checkAndInjectOverlay() {
-  const url = window.location.href;
-  const clipInfo = parseYouTubeUrl(url);
+function isYouTubeVideoPage(): boolean {
+  return window.location.pathname === '/watch' &&
+         window.location.search.includes('v=');
+}
 
-  console.log('[YouTube to GIF] Parsed URL:', clipInfo);
+/**
+ * Get video element info from the page
+ */
+async function getVideoInfo(): Promise<VideoInfo | null> {
+  const video = await waitForVideo();
+  if (!video) {
+    console.error('[YouTube to GIF] No video element found');
+    return null;
+  }
 
-  if (isYouTubeClipPage(url) && !overlayInjected) {
-    console.log('[YouTube to GIF] Clip detected, injecting overlay');
-    injectOverlay(clipInfo);
-  } else if (!isYouTubeClipPage(url) && overlayInjected) {
-    console.log('[YouTube to GIF] No longer on clip page, removing overlay');
+  // Parse video ID from URL
+  const urlInfo = parseYouTubeUrl(window.location.href);
+
+  return {
+    videoId: urlInfo.videoId,
+    duration: video.duration || 0,
+    currentTime: video.currentTime || 0,
+    src: video.src || video.currentSrc || ''
+  };
+}
+
+/**
+ * Wait for video element to be available and loaded
+ */
+function waitForVideo(): Promise<HTMLVideoElement | null> {
+  return new Promise((resolve) => {
+    const video = document.querySelector('video');
+
+    if (video && video.readyState >= 2) {
+      resolve(video);
+      return;
+    }
+
+    // Wait for video to load
+    const timeout = setTimeout(() => {
+      observer.disconnect();
+      resolve(document.querySelector('video'));
+    }, 5000); // 5 second timeout
+
+    const observer = new MutationObserver(() => {
+      const video = document.querySelector('video');
+      if (video && video.readyState >= 2) {
+        clearTimeout(timeout);
+        observer.disconnect();
+        resolve(video);
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  });
+}
+
+/**
+ * Toggle the overlay on/off
+ */
+async function toggleOverlay() {
+  console.log('[YouTube to GIF] Toggle overlay requested, current state:', overlayInjected);
+
+  if (!isYouTubeVideoPage()) {
+    console.log('[YouTube to GIF] Not on video page, cannot toggle overlay');
+    return;
+  }
+
+  if (overlayInjected) {
     removeOverlay();
+  } else {
+    const videoInfo = await getVideoInfo();
+    if (videoInfo) {
+      injectOverlay(videoInfo);
+    } else {
+      console.error('[YouTube to GIF] Failed to get video info');
+    }
   }
 }
 
 /**
  * Inject the React overlay into the page
  */
-async function injectOverlay(clipInfo: YouTubeClipInfo) {
+async function injectOverlay(videoInfo: VideoInfo) {
   // Check if overlay already exists
   if (document.getElementById('ytgif-overlay-root')) {
     console.log('[YouTube to GIF] Overlay already exists');
     return;
   }
 
-  // If this is a clip page but we're missing info, try to extract it from the page
-  if (clipInfo.clipId && (!clipInfo.videoId || clipInfo.startTime === null || clipInfo.endTime === null)) {
-    console.log('[YouTube to GIF] Incomplete clip info, extracting from page...');
-
-    try {
-      // Wait for YouTube to load the clip data
-      const extractedInfo = await waitForClipData(3000);
-
-      // Merge extracted info with existing clipInfo
-      if (extractedInfo.videoId) clipInfo.videoId = extractedInfo.videoId;
-      if (extractedInfo.startTime !== undefined && extractedInfo.startTime !== null) {
-        clipInfo.startTime = extractedInfo.startTime;
-      }
-      if (extractedInfo.endTime !== undefined && extractedInfo.endTime !== null) {
-        clipInfo.endTime = extractedInfo.endTime;
-      }
-
-      // If we still don't have times, try to infer from player
-      if (clipInfo.startTime === null || clipInfo.endTime === null) {
-        console.log('[YouTube to GIF] Inferring clip times from player...');
-        const inferredTimes = inferClipTimesFromPlayer();
-        if (inferredTimes) {
-          if (clipInfo.startTime === null) clipInfo.startTime = inferredTimes.startTime;
-          if (clipInfo.endTime === null) clipInfo.endTime = inferredTimes.endTime;
-        }
-      }
-
-      console.log('[YouTube to GIF] Final clip info:', clipInfo);
-    } catch (error) {
-      console.error('[YouTube to GIF] Failed to extract clip info:', error);
-    }
-  }
+  console.log('[YouTube to GIF] Injecting overlay with video info:', videoInfo);
 
   // Create container for React app
   const overlayRoot = document.createElement('div');
   overlayRoot.id = 'ytgif-overlay-root';
-  overlayRoot.className = 'ytgif-overlay-container';
+  overlayRoot.className = 'ytgif-overlay-container visible';
 
   // Append to body
   document.body.appendChild(overlayRoot);
-
-  // Send message to background script (this wakes up the service worker)
-  chrome.runtime.sendMessage({
-    type: 'CLIP_DETECTED',
-    clipInfo: clipInfo
-  }).catch(error => {
-    console.error('[YouTube to GIF] Failed to send clip detection:', error);
-  });
 
   overlayInjected = true;
 
   // Initialize the React overlay (imported at top of file)
   try {
-    initOverlay(clipInfo);
+    // Pass video info to overlay
+    initOverlay(videoInfo as any); // Temporary type cast, will update Overlay component to accept VideoInfo
     console.log('[YouTube to GIF] Overlay initialized successfully');
   } catch (error) {
     console.error('[YouTube to GIF] Failed to initialize overlay:', error);
-    // Fallback to simple button
-    injectSimpleButton(clipInfo);
   }
-}
-
-/**
- * Temporary: Inject a simple button until React overlay is ready
- */
-function injectSimpleButton(clipInfo: YouTubeClipInfo) {
-  const button = document.createElement('button');
-  button.id = 'ytgif-temp-button';
-  button.innerHTML = '🎬 Create GIF';
-  button.style.cssText = `
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    z-index: 10000;
-    padding: 12px 24px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    transition: transform 0.2s, box-shadow 0.2s;
-  `;
-
-  button.onmouseover = () => {
-    button.style.transform = 'translateY(-2px)';
-    button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
-  };
-
-  button.onmouseout = () => {
-    button.style.transform = 'translateY(0)';
-    button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-  };
-
-  button.onclick = () => {
-    console.log('[YouTube to GIF] Button clicked, clip info:', clipInfo);
-    alert(`Clip detected!\n\nVideo ID: ${clipInfo.videoId}\nStart: ${clipInfo.startTime}s\nEnd: ${clipInfo.endTime}s\n\nReact overlay coming in next step!`);
-  };
-
-  document.body.appendChild(button);
 }
 
 /**
@@ -174,17 +177,13 @@ function removeOverlay() {
     overlayRoot.remove();
   }
 
-  const tempButton = document.getElementById('ytgif-temp-button');
-  if (tempButton) {
-    tempButton.remove();
-  }
-
   overlayInjected = false;
+  console.log('[YouTube to GIF] Overlay removed');
 }
 
 /**
  * Observe URL changes in YouTube's SPA
- * YouTube doesn't trigger page reloads, so we need to watch for URL changes
+ * Remove overlay when navigating away from video pages
  */
 function observeUrlChanges() {
   let lastUrl = window.location.href;
@@ -200,7 +199,12 @@ function observeUrlChanges() {
       if (currentUrl !== lastUrl) {
         lastUrl = currentUrl;
         console.log('[YouTube to GIF] URL changed:', currentUrl);
-        checkAndInjectOverlay();
+
+        // Close overlay if navigating away from video page
+        if (!isYouTubeVideoPage() && overlayInjected) {
+          console.log('[YouTube to GIF] Navigated away from video page, removing overlay');
+          removeOverlay();
+        }
       }
       checkTimeout = null;
     }, 500); // Wait 500ms before checking
@@ -231,34 +235,11 @@ function observeUrlChanges() {
 
 /**
  * Observe when video player loads
- * This helps ensure we inject at the right time
+ * No longer needed for auto-injection, but kept for future use
  */
 function observeVideoPlayer() {
-  let lastCheck = 0;
-  const CHECK_INTERVAL = 1000; // Only check once per second
-
-  const observer = new MutationObserver((mutations) => {
-    // Throttle checks to avoid excessive calls
-    const now = Date.now();
-    if (now - lastCheck < CHECK_INTERVAL) {
-      return;
-    }
-    lastCheck = now;
-
-    // Check if video player exists
-    const videoPlayer = document.querySelector('video');
-    if (videoPlayer && isYouTubeClipPage(window.location.href) && !overlayInjected) {
-      console.log('[YouTube to GIF] Video player detected on clip page');
-      checkAndInjectOverlay();
-      // Once we inject, we can disconnect this observer
-      observer.disconnect();
-    }
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
+  // Simplified - no longer auto-injects overlay
+  // Overlay is now only shown when user clicks extension icon
 }
 
 // Start the content script
